@@ -32,5 +32,6 @@ All I have done is strip out the collectd code and enable writing to influxdb
 ## Usage
 
 python path/to/script/plex.py Host Port Authtoken
+
 python path/to/script/plex.py -h for more info
 
