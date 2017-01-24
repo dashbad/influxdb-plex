@@ -25,7 +25,6 @@ def dispatch_value(metric, value):
     client = InfluxDBClient('192.168.1.6', 8086,'','' , 'main')
     client.write_points(json_body)
 
-
 def get_metrics():
     '''Collect requested metrics and handle appropriately'''
     metrics = []
@@ -74,6 +73,7 @@ def get_metrics():
     # Handle metrics accordingly
     for metric in metrics:
             dispatch_value(metric['instance'], metric['value'])
+            # infomessage(metric['instance'] + str(metric['value']))
 
 def api_request(path, structure='json'):
     '''Return JSON/XML object from requested PMS path'''
