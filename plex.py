@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 from __future__ import print_function
+from influxdb import InfluxDBClient
 
 import argparse
 import sys
@@ -8,17 +9,24 @@ import requests
 
 CONFIG = None
 
-def dispatch_value(type_instance, plugin_instance, value):
-    '''Dispatch metric to collectd'''
-    val = collectd.Values(plugin='plex',
-                          type='gauge',
-                          type_instance=type_instance,
-                          plugin_instance=plugin_instance,
-                          values = [value])
-    val.dispatch()
+def dispatch_value(metric, value):
+    '''Dispatch metric to influxdb'''
+    json_body = [
+        {
+            "measurement": "plex_stats",
+            "tags": {
+                "metric": metric
+            },
+            "fields": {
+                "value": value
+            }
+        }
+    ]
+    client = InfluxDBClient('192.168.1.6', 8086,'','' , 'main')
+    client.write_points(json_body)
 
 
-def get_metrics(collectd=True):
+def get_metrics():
     '''Collect requested metrics and handle appropriately'''
     metrics = []
 
@@ -65,18 +73,7 @@ def get_metrics(collectd=True):
 
     # Handle metrics accordingly
     for metric in metrics:
-        if collectd is True:
-            # Dispatch metrics back to collectd
-            dispatch_value(metric['instance'], CONFIG.servername, metric['value'])
-        else:
-            # Print metrics in interactive mode
-            print({
-                'value': metric['value'],
-                'type_instance': metric['instance'],
-                'plugin_instance': CONFIG.servername,
-                'full_name': 'plex-{0}.{1}.value'.format(CONFIG.servername,
-                                                       metric['instance'])
-            })
+            dispatch_value(metric['instance'], metric['value'])
 
 def api_request(path, structure='json'):
     '''Return JSON/XML object from requested PMS path'''
@@ -264,7 +261,7 @@ def sum_videos(section, sum_leaf=False):
         return False
 
 
-def parse_config(collectdconfig=None):
+def parse_config():
 
     # Handle arguments
     parser = argparse.ArgumentParser(
@@ -315,14 +312,10 @@ def parse_config(collectdconfig=None):
         metavar='SECTION',
         help='section(s) to exclude collecting from')
 
-    if collectdconfig is None:
-        conf = parser.parse_args()
-    else:
-        conf = parser.parse_args(collectdconfig)
+    conf = parser.parse_args()
     return conf
 
 
-# Called interactively
 if __name__ == '__main__':
 
     # Define poor-man's messaging bus for printing
@@ -338,102 +331,4 @@ if __name__ == '__main__':
     CONFIG = parse_config()
 
     # Get metrics interactively
-    get_metrics(collectd=False)
-
-# Called from collectd
-else:
-
-    import collectd
-
-    # Define poor-man's messaging bus for collectd messaging
-    def infomessage(message):
-        collectd.info('plex plugin: ' + message)
-    def warnmessage(message):
-         collectd.warning('plex plugin: ' + message)
-    def errormessage(message): 
-        collectd.error('plex plugin: ' + message)
-        sys.exit(1)
-
-    # Configuration callback for collectd
-    def configure_callback(conf):
-        '''Handle collectd module parameters'''
-
-        # Initial/default parameters
-        host = None
-        port = None
-        authtoken = None
-        https = True
-        sessions = True
-	movies = True
-	shows = True
-	episodes = True
-	include = []
-	exclude = []
-        # Convert collectd module parameters
-	for node in conf.children:
-	    key = node.key.lower()
-            if key == 'include':
-               for section in node.values:
-                   include.append(str(int(section)))
-                   continue
-            elif key == 'exclude':
-               for section in node.values:
-                   exclude.append(str(int(section)))
-                   continue
-            else:
-	        val = node.values[0]
-                if key == 'host':
-                    host = val
-                elif key == 'port':
-                    port = str(int(val))
-                elif key == 'authtoken':
-                    authtoken = val
-                elif key == 'https':
-                    https = val
-                elif key == 'sessions':
-                    sessions = val,
-                elif key == 'movies':
-                    movies = val,
-                elif key == 'shows':
-                    shows = val,
-                elif key == 'episodes':
-                    episodes = val,
-                else:
-                    warnmessage(' Unknown config key: %s.' % key)
-                    continue
-
-        # Enforce required parameters
-        if host is None:
-            errormessage('Missing "Host" parameter!')
-        if port is None:
-            errormessage('Missing "Port" parameter!')
-        if authtoken is None:
-            errormessage('Missing "AuthToken" parameter!')
-        collectdconfig = [host,
-                          port,
-                          authtoken]
-        if https:
-            collectdconfig.append('--https')
-        if sessions:
-            collectdconfig.append('--sessions')
-        if movies:
-            collectdconfig.append('--movies')
-        if shows:
-            collectdconfig.append('--shows')
-        if episodes:
-            collectdconfig.append('--episodes')
-        
-        if len(include) > 0:
-            collectdconfig.append('--include')
-            collectdconfig.extend(include)
-        if len(exclude) > 0:
-            collectdconfig.append('--exclude')
-            collectdconfig.extend(exclude)
-        global CONFIG
-        CONFIG = parse_config(collectdconfig)
-        infomessage('configured with ' + str(CONFIG))
-
-    # Register configuration callback
-    collectd.register_config(configure_callback)
-    # Register read callback
-    collectd.register_read(get_metrics)
+    get_metrics()
