@@ -254,7 +254,10 @@ def sum_videos(section, sum_leaf=False):
     elif 'MediaContainer' in section:
         if sum_leaf:
             return sum(c['leafCount'] for c in section['MediaContainer']['Metadata'])
-        return len(section['MediaContainer']['Metadata'])
+        if 'Metadata' in section['MediaContainer']:
+            return len(section['MediaContainer']['Metadata'])
+        else:
+            return 0
     # Unknown format
     else:
         errormessage('Unknown section format!')
